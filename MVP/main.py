@@ -9,6 +9,7 @@ try:
     from data.processor import DataProcessor
     from chat.manager import ChatManager
     from utils.session import SessionManager
+    from utils.azure_helper import AzureHelper
 except ImportError as e:
     st.error(f"❌ 모듈 import 오류: {e}")
     st.error("📁 폴더 구조와 __init__.py 파일들을 확인해주세요!")

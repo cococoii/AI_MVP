@@ -2,6 +2,7 @@
 import streamlit as st
 import plotly.express as px
 import pandas as pd
+from utils.azure_helper import handle_azure_ai_query
 
 def render_welcome_message():
     """환영 메시지 렌더링"""
@@ -181,27 +182,95 @@ def render_summary_section(df, chat_mgr, session_mgr):
         st.info("💡 AI 요약: 영업일 변화와 이상 데이터를 포함한 종합 분석 제공")
 
 def render_chat_interface(chat_mgr, session_mgr):
-    """채팅 인터페이스 렌더링 (추천 질문 제거)"""
-    st.markdown("### 💬 AI와 대화하기")
+    """채팅 인터페이스 렌더링 (Azure AI 추가)"""
     
-    # 기존 메시지 표시
-    messages = st.session_state.get('messages', [])
-    for msg in messages:
-        with st.chat_message(msg["role"]):
-            st.markdown(msg["content"])
+    # Azure AI import
+    try:
+        azure_ai_available = True
+    except ImportError:
+        azure_ai_available = False
     
-    # 사용자 입력 처리 (추천 질문 제거)
-    is_processing = st.session_state.get('is_processing', False)
-    if not is_processing:
-        user_question = st.chat_input("💬 궁금한 점을 물어보세요!")
-        
-        if user_question:
-            if chat_mgr:
-                chat_mgr.handle_user_question(user_question, session_mgr)
-            else:
-                st.error("AI 채팅 매니저를 사용할 수 없습니다.")
+    # 탭으로 나누기
+    if azure_ai_available:
+        tab1, tab2 = st.tabs(["💬 AI 채팅", "☁️ Azure AI 분석"])
     else:
-        st.info("🤖 AI가 이전 질문을 처리하고 있습니다. 잠시만 기다려주세요...")
+        tab1, = st.tabs(["💬 AI 채팅"])
+        tab2 = None
+    
+    # ✅ 기존 채팅 기능 (그대로 유지)
+    with tab1:
+        st.markdown("### 💬 AI와 대화하기")
+        
+        # 기존 메시지 표시
+        messages = st.session_state.get('messages', [])
+        for msg in messages:
+            with st.chat_message(msg["role"]):
+                st.markdown(msg["content"])
+        
+        # 사용자 입력 처리
+        is_processing = st.session_state.get('is_processing', False)
+        if not is_processing:
+            user_question = st.chat_input("💬 궁금한 점을 물어보세요!")
+            
+            if user_question:
+                if chat_mgr:
+                    chat_mgr.handle_user_question(user_question, session_mgr)
+                else:
+                    st.error("AI 채팅 매니저를 사용할 수 없습니다.")
+    
+    # ✅ Azure AI 탭 (새로 추가)
+    if tab2 is not None:
+        with tab2:
+            st.markdown("### ☁️ Azure 저장 데이터 AI 분석")
+            st.caption("2025년 1월~6월 Azure 저장 데이터를 바탕으로 AI가 분석해드립니다")
+            
+            # 추천 질문 버튼들
+            st.markdown("**💡 추천 질문:**")
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                if st.button("📈 5G 프리미엄 트렌드", key="azure_q1"):
+                    st.session_state['azure_query'] = "5G 프리미엄 요금제 트렌드 어때?"
+            
+            with col2:
+                if st.button("💸 6월 할인 현황", key="azure_q2"):
+                    st.session_state['azure_query'] = "2025년 6월 할인 많이 받은 요금제는?"
+            
+            with col3:
+                if st.button("🤖 IoT 성장률", key="azure_q3"):
+                    st.session_state['azure_query'] = "IoT 센서 월정액 성장률 어떻게 변했어?"
+            
+            # 사용자 직접 입력
+            user_question = st.text_input(
+                "Azure 저장 데이터에 대해 질문하세요:",
+                placeholder="예: 차량용 단말 상반기 성장률은?",
+                key="azure_ai_input"
+            )
+            
+            # 질문 처리
+            query = user_question or st.session_state.get('azure_query', '')
+            
+            if query:
+                st.markdown(f"**🤖 질문:** {query}")
+                
+                with st.spinner("🤖 Azure AI 분석 중..."):
+                    ai_response = handle_azure_ai_query(query)
+                
+                st.markdown("**🤖 AI 답변:**")
+                st.markdown(ai_response)
+                
+                # 세션 정리
+                if 'azure_query' in st.session_state:
+                    del st.session_state['azure_query']
+            
+            # 도움말
+            with st.expander("💡 질문 예시"):
+                st.markdown("""
+                - "5G 프리미엄 요금제 2025년 상반기 성장률 어때?"
+                - "IoT 센서 월정액 트렌드 분석해줘"
+                - "2025년 6월 할인 가장 많이 받은 요금제는?"
+                - "차량용 단말 vs IoT 센서 비교해줘"
+                """)
 
 def render_chart_visualization(df, keyword):
     """차트 시각화 렌더링"""
