@@ -27,14 +27,17 @@ def load_custom_styles():
         
         /* 버튼 스타일 개선 */
         .stButton > button {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            border-radius: 8px;
-            padding: 0.5rem 1rem;
+            width: 100%;
+            padding: 0.75rem 1rem;
+            font-size: 1rem;
             font-weight: 600;
+            color: #333;
+            background:
+                linear-gradient(white, white) padding-box,  /* 내부 배경 */
+                linear-gradient(135deg, #667eea, #764ba2) border-box;  /* 테두리용 그라디언트 */
+            border: 1px solid transparent;  /* 투명 테두리로 공간 확보 */
+            border-radius: 0.5rem;
             transition: all 0.3s ease;
-            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
         }
         
         .stButton > button:hover {

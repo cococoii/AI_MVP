@@ -186,7 +186,7 @@ class DataProcessor:
                 else:
                     st.warning("⚠️ Azure 연결 실패 - 환경변수 또는 네트워크 확인")
                 
-            st.success("✅ 데이터가 성공적으로 업로드되었습니다!")
+            # st.success("✅ 데이터가 성공적으로 업로드되었습니다!")
             return df
             
         except Exception as e:

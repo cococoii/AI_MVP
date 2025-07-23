@@ -30,7 +30,7 @@ class AzureHelper:
                 container_client = self.client.get_container_client("billing-data")
                 container_client.get_container_properties()
                 self.connected = True
-                st.success("✅ Azure 연결 성공!")
+                # st.success("✅ Azure 연결 성공!")
             except Exception as e:
                 st.error(f"❌ Azure 연결 실패: {e}")
                 self.connected = False
@@ -103,24 +103,24 @@ class AzureHelper:
                             df = self._clean_dataframe(df)
                             all_data[month_key] = df
                             file_count += 1
-                            st.write(f"✅ {blob_name} 로드 완료 ({len(df)}행)")
+                            # st.write(f"✅ {blob_name} 로드 완료 ({len(df)}행)")
                             
                     except Exception as e:
-                        st.warning(f"⚠️ {blob_name} 로드 실패: {e}")
+                        st.warning(f"⚠️ 로드 실패")
             
-            if all_data:
-                st.success(f"🎉 총 {len(all_data)}개 월의 데이터 로드 완료!")
-                # 데이터 구조 미리보기
-                sample_month = list(all_data.keys())[0]
-                sample_df = all_data[sample_month]
-                st.write(f"📋 **데이터 구조** ({sample_month} 샘플):")
-                st.write(f"- 컬럼: {list(sample_df.columns)}")
-                st.write(f"- 행 수: {len(sample_df)}")
-                if len(sample_df) > 0:
-                    st.write("- 샘플 데이터:")
-                    st.dataframe(sample_df.head(3))
-            else:
-                st.error("❌ 로드할 수 있는 데이터 파일이 없습니다.")
+            # if all_data:
+            #     st.success(f"🎉 총 {len(all_data)}개 월의 데이터 로드 완료!")
+            #     # 데이터 구조 미리보기
+            #     sample_month = list(all_data.keys())[0]
+            #     sample_df = all_data[sample_month]
+            #     st.write(f"📋 **데이터 구조** ({sample_month} 샘플):")
+            #     # st.write(f"- 컬럼: {list(sample_df.columns)}")
+            #     st.write(f"- 행 수: {len(sample_df)}")
+            #     if len(sample_df) > 0:
+            #         st.write("- 샘플 데이터")
+            #         st.dataframe(sample_df.head(3))
+            # else:
+            #     st.error("❌ 로드할 수 있는 데이터 파일이 없습니다.")
             
             return all_data
             
@@ -702,8 +702,8 @@ def handle_azure_ai_query(user_question):
     
     # 분석 실행
     try:
-        with st.spinner("🤖 Azure 데이터를 분석하고 있습니다..."):
-            result = azure_helper.analyze_service_query(user_question)
+        # with st.spinner("🤖 Azure 데이터를 분석하고 있습니다..."):
+        result = azure_helper.analyze_service_query(user_question)
         
         return result
         
