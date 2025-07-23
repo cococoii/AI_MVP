@@ -103,10 +103,10 @@ class AzureHelper:
                             df = self._clean_dataframe(df)
                             all_data[month_key] = df
                             file_count += 1
-                            # st.write(f"✅ {blob_name} 로드 완료 ({len(df)}행)")
+                            st.write(f"✅ {blob_name} 로드 완료 ({len(df)}행)")
                             
                     except Exception as e:
-                        st.warning(f"로드 실패")
+                        st.warning(f"⚠️ {blob_name} 로드 실패: {e}")
             
             if all_data:
                 st.success(f"🎉 총 {len(all_data)}개 월의 데이터 로드 완료!")
@@ -272,7 +272,7 @@ class AzureHelper:
         if not matching_services:
             return f"❌ **'{service_code}' 서비스를 찾을 수 없습니다**\n\n다른 서비스 코드를 확인해주세요."
         
-        response += f"📋- **발견된 서비스**: {len(matching_services)}개\n\n"
+        response += f"📋 **발견된 서비스**: {len(matching_services)}개\n\n"
         
         # 각 서비스별 상세 분석
         for service_name in sorted(matching_services):
@@ -372,7 +372,7 @@ class AzureHelper:
         if not matching_services:
             return f"❌ **'{', '.join(keywords)}' 관련 서비스를 찾을 수 없습니다**\n\n다른 키워드를 시도해보세요."
         
-        response += f"- 📋 **발견된 서비스**: {len(matching_services)}개\n\n"
+        response += f"📋 **발견된 서비스**: {len(matching_services)}개\n\n"
         
         # 최신 월 기준 성과 순위
         latest_month = max(all_data.keys())
@@ -393,7 +393,7 @@ class AzureHelper:
         # 청구금액 순으로 정렬
         service_performance.sort(key=lambda x: x['amount'], reverse=True)
         
-        response += f"- **📊 성과 순위** ({latest_month} 기준):\n\n"
+        response += f"**📊 성과 순위** ({latest_month} 기준):\n\n"
         
         for i, sp in enumerate(service_performance[:10], 1):  # 상위 10개만
             service = sp['service']
@@ -401,10 +401,10 @@ class AzureHelper:
             lines = sp['lines']
             arpu = amount / lines if lines > 0 else 0
             
-            rank_emoji = "- 🥇" if i == 1 else "- 🥈" if i == 2 else "- 🥉" if i == 3 else f"{i}."
+            rank_emoji = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else f"{i}."
             
-            response += f"- {rank_emoji} **{service}**\n"
-            response += f"- 💰 {amount:,.0f}원, 📱 {lines:,.0f}회선, ARPU {arpu:,.0f}원\n\n"
+            response += f"{rank_emoji} **{service}**\n"
+            response += f"   💰 {amount:,.0f}원, 📱 {lines:,.0f}회선, ARPU {arpu:,.0f}원\n\n"
         
         return response
 
