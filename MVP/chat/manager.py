@@ -1,10 +1,14 @@
-# chat/manager.py (이상 항목 상세 표시)
+# chat/manager.py - 예전 영업일수+이상탐지 방식 + 그래프 추가
 import streamlit as st
 from openai import AzureOpenAI
 import os
 from dotenv import load_dotenv
-from ui.components import render_chart_visualization
+# from ui.components import render_chart_visualization
 from config.settings import MODEL_NAME, API_VERSION
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 load_dotenv()
 
@@ -30,7 +34,7 @@ class ChatManager:
         st.session_state.is_processing = False
     
     def generate_summary(self, df, session_mgr):
-        """AI 요약 생성 (이상 항목 상세 표시)"""
+        """AI 요약 생성 (이상 항목 상세 표시) + 그래프 추가"""
         if not self.client:
             st.error("AI 클라이언트가 초기화되지 않았습니다.")
             return
@@ -40,8 +44,21 @@ class ChatManager:
         # 사용자 메시지 추가
         if 'messages' not in st.session_state:
             st.session_state.messages = []
+
         st.session_state.messages.append({"role": "user", "content": "📋 데이터 요약을 요청합니다."})
-        
+        # if "messages" in st.session_state:
+        # for msg in st.session_state.messages:
+        #     with st.chat_message(msg["role"]):
+        #         st.markdown(msg["content"])
+
+        #         # ✅ 그래프 데이터가 있으면 다시 그리기
+        #         if msg["role"] == "assistant" and msg.get("flagged"):
+        #             import pandas as pd
+        #             df_flagged = pd.DataFrame(msg["flagged"])
+        #             if not df_flagged.empty:
+        #                 st.markdown("---")
+        #                 st.markdown("### 📊 **이상 항목 시각화**")
+        #                 chat_mgr._create_anomaly_charts(df_flagged)
         try:
             with st.spinner("🤖 AI가 데이터를 분석하고 있습니다..."):
                 # 데이터 프로세서 인스턴스 생성하여 이상 탐지
@@ -51,7 +68,7 @@ class ChatManager:
                 # 이상 탐지 실행
                 df_flagged = processor.detect_anomalies(df)
                 
-                # 요약 프롬프트 생성
+                # 예전 방식의 상세 이상항목 요약 프롬프트 생성
                 summary_prompt = self._create_detailed_anomaly_prompt(df, df_flagged)
                 
                 summary_reply = self.client.chat.completions.create(
@@ -67,10 +84,22 @@ class ChatManager:
                 reply_text = summary_reply.choices[0].message.content
                 
                 # AI 응답 표시
-                with st.chat_message("assistant"):
-                    st.markdown(reply_text)
-                
-                st.session_state.messages.append({"role": "assistant", "content": reply_text})
+                # with st.chat_message("assistant"):
+                #     # st.markdown(reply_text)
+                    
+                #     # 🎯 이상 항목들의 그래프 자동 생성
+                #     if len(df_flagged) > 0:
+                #         # st.markdown("---")
+                #         # st.markdown("##### 📊 **이상 항목 시각화**")
+                #         # print(self._create_anomaly_charts(df_flagged))
+                #         self._create_anomaly_charts(df_flagged)
+                        
+                st.session_state.messages.append({
+                            "role": "assistant",
+                            "content": reply_text,
+                            "flagged": df_flagged.to_dict(orient="records") if len(df_flagged) > 0 else None
+                        })
+                # st.session_state.messages.append({"role": "assistant", "content": reply_text})
                 
                 if session_mgr:
                     session_mgr.save_current_chat()
@@ -84,7 +113,7 @@ class ChatManager:
             st.session_state.is_processing = False
     
     def _create_detailed_anomaly_prompt(self, df, df_flagged):
-        """이상 항목 상세 정보를 포함한 요약 프롬프트"""
+        """이상 항목 상세 정보를 포함한 요약 프롬프트 (예전 방식 그대로)"""
         # 영업일 상세 정보
         detailed_biz_days = st.session_state.get('detailed_biz_days', {})
         biz_days_summary = st.session_state.get('biz_days', {})
@@ -200,7 +229,7 @@ class ChatManager:
         """
     
     def _create_detailed_anomaly_list(self, df_flagged):
-        """상세 이상 항목 리스트 생성"""
+        """상세 이상 항목 리스트 생성 (예전 방식 그대로)"""
         if len(df_flagged) == 0:
             return "탐지된 이상 항목이 없습니다."
         
@@ -281,39 +310,141 @@ class ChatManager:
         
         return "\n".join(anomaly_list)
     
-    def _get_system_prompt(self):
-        """시스템 프롬프트"""
-        return """
-너는 한국의 청구 데이터 분석 전문가야.
-특히 영업일 수 변화와 이상 데이터 탐지가 전문 분야야.
-
-분석 원칙:
-1. 영업일 수 변화를 항상 우선 고려
-2. 이상 항목들을 구체적인 이름과 수치로 설명
-3. 심각도에 따라 우선순위를 정해서 설명
-4. 영업일 정규화 후 실질적 이상 패턴만 식별
-
-응답 스타일:
-- 친근하고 전문적인 톤
-- **이상 항목은 구체적인 데이터로 설명**
-- 실제 고객명/상품명과 변화 수치 포함
-- 비즈니스 관점에서의 실용적 조언
-
-특히 이상하게 늘어난 항목들을 구체적으로 언급하고,
-각 항목의 문제점과 확인이 필요한 이유를 명확히 설명해줘.
-
-"항목 A", "고객 B" 같은 일반적 표현 대신, 
-실제 데이터에 있는 구체적인 이름과 수치를 사용해서 설명해줘.
-        """
+    def _create_anomaly_charts(self, df_flagged):
+        """이상 항목들의 그래프 생성"""
+        if len(df_flagged) == 0:
+            st.info("이상 항목이 없어서 그래프를 생성할 수 없습니다.")
+            return
+        
+        # 상위 10개 이상 항목만
+        display_count = min(10, len(df_flagged))
+        df_top = df_flagged.head(display_count)
+        
+        try:
+            # 1. 회선수 변화 그래프 (m3 → m2 → m1)
+            st.markdown("##### 📊 **이상 항목 시각화")
+            if all(col in df_top.columns for col in ['m3월회선수', 'm2월회선수', 'm1월회선수']):
+                
+                # 첫 번째 컬럼을 항목명으로 사용
+                first_col = df_top.columns[0]
+                service_names = df_top[first_col].astype(str).tolist()
+                
+                fig_lines = go.Figure()
+                
+                # 각 서비스별 라인 그래프
+                for i, (_, row) in enumerate(df_top.iterrows()):
+                    service_name = str(row[first_col])[:20] + "..." if len(str(row[first_col])) > 20 else str(row[first_col])
+                    
+                    fig_lines.add_trace(go.Scatter(
+                        x=['M3', 'M2', 'M1'],
+                        y=[row['m3월회선수'], row['m2월회선수'], row['m1월회선수']],
+                        mode='lines+markers',
+                        name=service_name,
+                        line=dict(width=3),
+                        marker=dict(size=8)
+                    ))
+                
+                fig_lines.update_layout(
+                    title="📱 이상 항목들의 회선수 변화 (M3 → M2 → M1)",
+                    xaxis_title="기간",
+                    yaxis_title="회선수",
+                    height=500,
+                    hovermode='x unified'
+                )
+                
+                st.plotly_chart(fig_lines, use_container_width=True)
+            
+            # 2. 청구금액 변화 그래프
+            if all(col in df_top.columns for col in ['m3청구금액', 'm2청구금액', 'm1청구금액']):
+                # st.markdown("#### 💰 **이상 항목 청구금액 변화**")
+                
+                fig_amount = go.Figure()
+                
+                for i, (_, row) in enumerate(df_top.iterrows()):
+                    service_name = str(row[first_col])[:20] + "..." if len(str(row[first_col])) > 20 else str(row[first_col])
+                    
+                    fig_amount.add_trace(go.Scatter(
+                        x=['M3', 'M2', 'M1'],
+                        y=[row['m3청구금액'], row['m2청구금액'], row['m1청구금액']],
+                        mode='lines+markers',
+                        name=service_name,
+                        line=dict(width=3),
+                        marker=dict(size=8)
+                    ))
+                
+                fig_amount.update_layout(
+                    title="💰 이상 항목들의 청구금액 변화 (M3 → M2 → M1)",
+                    xaxis_title="기간",
+                    yaxis_title="청구금액 (원)",
+                    height=500,
+                    hovermode='x unified'
+                )
+                
+                st.plotly_chart(fig_amount, use_container_width=True)
+            
+            # 3. 변화율 비교 막대 그래프
+            if '청구금액_변화율' in df_top.columns and '회선수_변화율' in df_top.columns:
+                # st.markdown("#### 📊 **변화율 비교 (청구금액 vs 회선수)**")
+                
+                # 서비스명 단축
+                service_names_short = [str(name)[:15] + "..." if len(str(name)) > 15 else str(name) 
+                                     for name in df_top[first_col]]
+                
+                fig_compare = go.Figure()
+                
+                fig_compare.add_trace(go.Bar(
+                    name='청구금액 변화율',
+                    x=service_names_short,
+                    y=df_top['청구금액_변화율'],
+                    marker_color='lightblue'
+                ))
+                
+                fig_compare.add_trace(go.Bar(
+                    name='회선수 변화율',
+                    x=service_names_short,
+                    y=df_top['회선수_변화율'],
+                    marker_color='lightcoral'
+                ))
+                
+                fig_compare.update_layout(
+                    title="📊 이상 항목들의 변화율 비교",
+                    xaxis_title="서비스",
+                    yaxis_title="변화율 (%)",
+                    barmode='group',
+                    height=500,
+                    xaxis={'tickangle': -45}
+                )
+                
+                st.plotly_chart(fig_compare, use_container_width=True)
+            
+            # 4. 이상 유형별 분포 파이 차트
+            if '이상_유형' in df_flagged.columns:
+                st.markdown("#### 🔍 **이상 유형별 분포**")
+                
+                type_counts = df_flagged['이상_유형'].value_counts()
+                
+                fig_pie = px.pie(
+                    values=type_counts.values,
+                    names=type_counts.index,
+                    title="이상 유형별 분포",
+                    color_discrete_sequence=px.colors.qualitative.Set3
+                )
+                
+                fig_pie.update_traces(textposition='inside', textinfo='percent+label')
+                st.plotly_chart(fig_pie, use_container_width=True)
+                
+        except Exception as e:
+            st.error(f"그래프 생성 중 오류: {e}")
+            st.info("일부 필요한 컬럼이 없어서 그래프를 생성할 수 없습니다.")
     
     def handle_user_question(self, user_question, session_mgr):
-        """사용자 질문 처리"""
+        """사용자 질문 처리 (예전 방식 + 관련 그래프)"""
         if not self.client:
             st.error("AI 클라이언트가 초기화되지 않았습니다.")
             return
             
-        with st.chat_message("user"):
-            st.markdown(user_question)
+        # with st.chat_message("user"):
+        #     st.markdown(user_question)
         
         if 'messages' not in st.session_state:
             st.session_state.messages = []
@@ -353,13 +484,18 @@ class ChatManager:
                 
                 reply = gpt_reply.choices[0].message.content
                 
-                with st.chat_message("assistant"):
-                    st.markdown(reply)
+                # with st.chat_message("assistant"):
+                #     st.markdown(reply)
+                    
+                #     # 🎯 질문이 특정 서비스에 대한 것이라면 해당 서비스 그래프 생성
+                #     if any(keyword in user_question.lower() for keyword in ['addon', '컬러링', '서비스', '이상', '변화', '트렌드']):
+                #         self._create_service_specific_chart(user_question, df)
                     
                 st.session_state.messages.append({"role": "assistant", "content": reply})
                 
                 if session_mgr:
                     session_mgr.save_current_chat()
+                return reply
 
         except Exception as e:
             error_msg = f"죄송합니다. 답변 생성 중 오류가 발생했습니다: {str(e)}"
@@ -369,15 +505,94 @@ class ChatManager:
         
         finally:
             st.session_state.is_processing = False
+            # st.rerun()  # 🔧 채팅 위치 고정
+    
+    def _create_service_specific_chart(self, question, df):
+        """특정 서비스 질문에 대한 차트 생성"""
+        question_lower = question.lower()
         
-        # 요금제 관련 질문일 경우 시각화 추가
-        if st.session_state.last_dataframe is not None and "요금제" in user_question:
-            keyword = self._extract_keyword_from_question(user_question)
-            if keyword:
-                render_chart_visualization(st.session_state.last_dataframe, keyword)
+        # 질문에서 서비스 키워드 추출
+        if 'addon' in question_lower or '컬러링' in question_lower:
+            # ADDON 관련 서비스 필터링
+            addon_services = df[df.iloc[:, 0].astype(str).str.contains('ADDON|컬러링', case=False, na=False)]
+            
+            if len(addon_services) > 0:
+                st.markdown("---")
+                st.markdown("### 📊 **ADDON/컬러링 서비스 분석 차트**")
+                
+                try:
+                    # 시계열 데이터가 있는 경우
+                    if all(col in addon_services.columns for col in ['m3월회선수', 'm2월회선수', 'm1월회선수']):
+                        
+                        fig = go.Figure()
+                        
+                        for _, row in addon_services.iterrows():
+                            service_name = str(row.iloc[0])[:20] + "..." if len(str(row.iloc[0])) > 20 else str(row.iloc[0])
+                            
+                            fig.add_trace(go.Scatter(
+                                x=['M3 (3개월전)', 'M2 (2개월전)', 'M1 (1개월전)'],
+                                y=[row['m3월회선수'], row['m2월회선수'], row['m1월회선수']],
+                                mode='lines+markers',
+                                name=service_name,
+                                line=dict(width=4),
+                                marker=dict(size=10)
+                            ))
+                        
+                        fig.update_layout(
+                            title="📱 ADDON/컬러링 서비스 회선수 변화",
+                            xaxis_title="기간",
+                            yaxis_title="회선수",
+                            height=500,
+                            hovermode='x unified'
+                        )
+                        
+                        st.plotly_chart(fig, use_container_width=True)
+                        
+                        # 수치 요약 테이블
+                        st.markdown("#### 📋 **상세 수치**")
+                        summary_data = []
+                        
+                        for _, row in addon_services.iterrows():
+                            summary_data.append({
+                                '서비스명': str(row.iloc[0]),
+                                'M3 회선수': f"{row['m3월회선수']:,}개",
+                                'M2 회선수': f"{row['m2월회선수']:,}개", 
+                                'M1 회선수': f"{row['m1월회선수']:,}개",
+                                '변화 (M3→M1)': f"{((row['m1월회선수'] - row['m3월회선수']) / row['m3월회선수'] * 100):+.1f}%" if row['m3월회선수'] > 0 else "N/A"
+                            })
+                        
+                        st.dataframe(pd.DataFrame(summary_data), use_container_width=True)
+                        
+                except Exception as e:
+                    st.error(f"차트 생성 중 오류: {e}")
+    
+    def _get_system_prompt(self):
+        """시스템 프롬프트 (예전 방식 그대로)"""
+        return """
+너는 한국의 청구 데이터 분석 전문가야.
+특히 영업일 수 변화와 이상 데이터 탐지가 전문 분야야.
+
+분석 원칙:
+1. 영업일 수 변화를 항상 우선 고려
+2. 이상 항목들을 구체적인 이름과 수치로 설명
+3. 심각도에 따라 우선순위를 정해서 설명
+4. 영업일 정규화 후 실질적 이상 패턴만 식별
+
+응답 스타일:
+- 친근하고 전문적인 톤
+- **이상 항목은 구체적인 데이터로 설명**
+- 실제 고객명/상품명과 변화 수치 포함
+- 비즈니스 관점에서의 실용적 조언
+
+특히 이상하게 늘어난 항목들을 구체적으로 언급하고,
+각 항목의 문제점과 확인이 필요한 이유를 명확히 설명해줘.
+
+"항목 A", "고객 B" 같은 일반적 표현 대신, 
+실제 데이터에 있는 구체적인 이름과 수치를 사용해서 설명해줘.
+        """
     
     def _format_business_days(self, detailed_biz_days):
-        """영업일 정보 포맷팅"""
+        """영업일 정보 포맷팅 (예전 방식 그대로)"""
         if not detailed_biz_days:
             return "영업일 정보가 없습니다."
         
@@ -396,7 +611,7 @@ class ChatManager:
         return "\n".join(formatted_lines)
     
     def _extract_keyword_from_question(self, question):
-        """질문에서 키워드 추출"""
+        """질문에서 키워드 추출 (기존 유지)"""
         if "요금제" in question:
             parts = question.split("요금제")
             if len(parts) > 1:
@@ -409,7 +624,7 @@ class ChatManager:
         return ""
     
     def get_conversation_summary(self):
-        """대화 요약 반환"""
+        """대화 요약 반환 (기존 유지)"""
         if not st.session_state.get('messages', []):
             return "대화 기록이 없습니다."
         
@@ -417,6 +632,6 @@ class ChatManager:
         return f"총 {len(user_questions)}개의 질문이 있었습니다: {', '.join(user_questions[:3])}{'...' if len(user_questions) > 3 else ''}"
     
     def clear_conversation(self):
-        """대화 기록 초기화"""
+        """대화 기록 초기화 (기존 유지)"""
         st.session_state.messages = []
         st.session_state.is_processing = False

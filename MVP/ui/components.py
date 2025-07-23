@@ -227,14 +227,18 @@ def render_anomaly_detection(df, data_processor):
 def render_summary_section(df, chat_mgr, session_mgr):
     """AI 요약 섹션 (간단하게 - 버튼만)"""
     st.markdown("##### 💻 AI 분석 요약")
-    st.info("💡 AI 요약 버튼 클릭시 : 영업일 변화와 이상 데이터를 포함한 종합 분석 제공")
-    is_processing = st.session_state.get('is_processing', False)
-    if st.button("📋 AI 요약 생성", disabled=is_processing, key="ai_summary_btn"):
-        if chat_mgr:
-            chat_mgr.generate_summary(df, session_mgr)
-            st.rerun()
-        else:
-            st.error("AI 채팅 매니저를 사용할 수 없습니다.")
+    col1, col2 = st.columns(2)
+    with col1:
+        is_processing = st.session_state.get('is_processing', False)
+        if st.button("📋 AI 요약 생성", disabled=is_processing, key="ai_summary_btn"):
+            if chat_mgr:
+                chat_mgr.generate_summary(df, session_mgr)
+                # st.rerun()
+            else:
+                st.error("AI 채팅 매니저를 사용할 수 없습니다.")
+    with col2:
+        st.info("💡 AI 요약 버튼 클릭시 : 영업일 변화와 이상 데이터를 포함한 종합 분석 제공")
+    
 
 def render_chat_interface(chat_mgr, session_mgr):
     """채팅 인터페이스 렌더링 (Azure AI 추가)"""
@@ -268,15 +272,19 @@ def render_chat_interface(chat_mgr, session_mgr):
             user_question = st.chat_input("💬 궁금한 점을 물어보세요!")
             
             if user_question:
+                with st.chat_message("user"):
+                    st.markdown(user_question)  # ✅ 사용자가 질문하자마자 UI에 표시
                 if chat_mgr:
-                    chat_mgr.handle_user_question(user_question, session_mgr)
+                    reply = chat_mgr.handle_user_question(user_question, session_mgr)
+                    with st.chat_message("assistant"):
+                        st.markdown(reply)
                 else:
                     st.error("AI 채팅 매니저를 사용할 수 없습니다.")
     
     # ✅ Azure AI 탭 (새로 추가)
     if tab2 is not None:
         with tab2:
-            st.markdown("### ☁️ Azure 저장 데이터 AI 분석")
+            st.markdown("##### ☁️ Azure 저장 데이터 AI 분석")
             st.caption("2025년 1월~6월 Azure 저장 데이터를 바탕으로 AI가 분석해드립니다")
             
             # 추천 질문 버튼들
@@ -337,26 +345,13 @@ def render_chat_interface(chat_mgr, session_mgr):
             query = user_question or st.session_state.get('azure_query', '')
             
             if query:
-                # 🎨 질문 표시 (카드 형태)
-                st.markdown(f"""
-                <div style="
-                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                    padding: 15px;
-                    border-radius: 10px;
-                    margin: 15px 0;
-                    color: white;
-                    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-                ">
-                    <h4 style="margin:0; color:white;">🤖 질문: {query}</h4>
-                </div>
-                """, unsafe_allow_html=True)
                 
                 # AI 분석 실행
-                with st.spinner("🧠 Azure AI가 월별 데이터를 분석하고 있습니다..."):
-                    ai_response = handle_azure_ai_query(query)
+                # with st.spinner("🧠 Azure AI가 월별 데이터를 분석하고 있습니다..."):
+                ai_response = handle_azure_ai_query(query)
                 
                 # 응답 표시
-                st.markdown("#### 🤖 **AI 분석 결과**")
+                st.markdown("##### 🤖 **AI 분석 결과**")
                 st.markdown(ai_response)
                 
                 # 세션 정리
@@ -368,21 +363,21 @@ def render_chat_interface(chat_mgr, session_mgr):
                 st.markdown("""
                 **🎯 구체적인 질문 예시:**
                 
+                **🔍 비교 분석:**
+                * "5G vs LTE 성과 비교해줘"
+                * "모바일 vs 기업솔루션 어느쪽이 더 좋아?"
+
                 **📈 트렌드 분석:**
-                - "DATA001 서비스 6개월간 성장률 어떻게 변했어?"
-                - "IoT 관련 서비스들 중에 어떤게 가장 빠르게 성장했어?"
-                
-                **💰 수익성 분석:**
-                - "ARPU가 가장 높은 서비스 top 5는?"
-                - "기업용 서비스들 중에 수익성이 가장 좋은건?"
-                
-                **📊 비교 분석:**
-                - "VOICE001 vs DATA001 어떤게 더 안정적이야?"
-                - "2025년 상반기 신규 출시 서비스들 성과 비교해줘"
-                
-                **🔍 원인 분석:**
-                - "VPN001 서비스가 3월부터 급성장한 이유는?"
-                - "할인율이 높은 서비스들이 실제로 더 성장했어?"
+                * "가장 빠르게 성장한 서비스는?"
+                * "IoT 서비스들 트렌드 어떻게 변했어?"
+
+                **🏆 순위 분석:**
+                * "수익성 가장 높은 서비스 TOP 10은?"
+                * "LOB별 성과 순위 알려줘"
+
+                **🆕 신규 서비스:**
+                * "신규 출시된 서비스들 성과는?"
+                * "2025년 상반기 런칭 서비스 분석해줘"
                 """)
                 
 def generate_smart_summary(df, df_flagged):

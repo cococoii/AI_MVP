@@ -117,6 +117,16 @@ def load_custom_styles():
             background: linear-gradient(135deg, #54d8a3, #2e3544);
             transform: scale(1.03);
         }
-        
+        div[data-testid="stChatInput"] {
+        position: fixed;
+        bottom: 0;
+        left: 16rem; /* 기본 sidebar 너비 고려 */
+        right: 0;
+        background-color: white;
+        padding: 1rem;
+        box-shadow: 0 -1px 4px rgba(0,0,0,0.1);
+        z-index: 9999;
+        }
+                
     </style>
     """, unsafe_allow_html=True)
