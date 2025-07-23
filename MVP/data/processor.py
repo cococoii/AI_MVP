@@ -180,7 +180,7 @@ class DataProcessor:
                 if azure.connected:
                     success, result = azure.upload_csv(df, uploaded_file.name)
                     if success:
-                        st.info(f"☁️ Azure Blob에 저장됨: {result}")
+                        st.info(f"☁️ Azure Blob에 저장됨: {uploaded_file.name}")
                     else:
                         st.warning(f"❌ Azure 업로드 실패: {result}")
                 else:

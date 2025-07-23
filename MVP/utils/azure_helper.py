@@ -16,6 +16,8 @@ class AzureHelper:
     
     def __init__(self):
         self.setup_connection()
+        self.available_files = []
+        self.months = []
         
         # Blob Storage의 월별 데이터 경로
         self.monthly_data_paths = {
@@ -32,8 +34,6 @@ class AzureHelper:
             "5G 프리미엄 월정액": "plan_metadata/5G_프리미엄_월정액_metadata.json",
             "LTE 무제한 월정액": "plan_metadata/LTE_무제한_월정액_metadata.json",
             "IoT 센서 월정액": "plan_metadata/IoT_센서_월정액_metadata.json",
-            
-            # ✅ 누락된 메타데이터들 추가
             "VPN 서비스 월정액": "plan_metadata/VPN_서비스_월정액_metadata.json",
             "가족 무제한 월정액": "plan_metadata/가족_무제한_월정액_metadata.json",
             "국제통화 사용료": "plan_metadata/국제통화_사용료_metadata.json",
@@ -80,319 +80,324 @@ class AzureHelper:
             return True, blob_name
         except Exception as e:
             return False, str(e)
-
-    def analyze_plan_query(self, user_question):
-        """사용자 질문 분석해서 요금제 정보 제공"""
-        if not self.connected:
-            return "❌ Azure에 연결되지 않았습니다"
         
+    def _discover_available_files(self):
+        """Azure Blob Storage에서 모든 청구 데이터 파일 자동 탐지"""
         try:
-            # 1. 질문에서 요금제명 추출
-            plan_names = self.extract_plan_names(user_question)
+            container_client = self.client.get_container_client("billing-data")
             
-            # 2. 질문에서 월 정보 추출
-            months = self.extract_months(user_question)
+            # 모든 blob 목록 가져오기
+            blob_list = container_client.list_blobs()
+            print(blob_list)  # 디버깅용 출력
             
-            # 3. 질문 유형 분석
-            query_type = self.analyze_query_type(user_question)
+            billing_files = []
             
-            # 4. Blob Storage에서 데이터 조회
-            plan_data = self.fetch_plan_data(plan_names, months)
+            for blob in blob_list:
+                blob_name = blob.name
+                
+                # CSV 파일이고 billing_data로 시작하는 파일들 찾기
+                if (blob_name.endswith('.csv') and 
+                    ('billing_data' in blob_name.lower() or 'billing' in blob_name.lower())):
+                    
+                    # 월 정보 추출 시도
+                    month_match = re.search(r'20\d{2}[-_]?\d{2}', blob_name)
+                    if month_match:
+                        month_str = month_match.group().replace('_', '-')
+                        if len(month_str) == 7:  # 2025-01 형태
+                            billing_files.append({
+                                'blob_name': blob_name,
+                                'month': month_str,
+                                'size': blob.size,
+                                'last_modified': blob.last_modified
+                            })
+                    else:
+                        # 월 정보가 없어도 청구 데이터로 보이면 포함
+                        billing_files.append({
+                            'blob_name': blob_name,
+                            'month': 'unknown',
+                            'size': blob.size,
+                            'last_modified': blob.last_modified
+                        })
             
-            # 5. AI 분석 결과 생성
-            ai_response = self.generate_ai_response(user_question, plan_data, query_type)
+            # 월순으로 정렬
+            billing_files.sort(key=lambda x: x['month'] if x['month'] != 'unknown' else '9999-99')
             
-            return ai_response
+            self.available_files = billing_files
+            self.months = [f['month'] for f in billing_files if f['month'] != 'unknown']
+            
+            st.success(f"✅ {len(billing_files)}개 청구 데이터 파일 발견!")
+            
+            # # 발견된 파일들 표시
+            # if billing_files:
+            #     st.info("📁 **발견된 파일들:**")
+            #     for file_info in billing_files:
+            #         size_kb = file_info['size'] / 1024
+            #         st.text(f"  📄 {file_info['blob_name']} ({file_info['month']}) - {size_kb:.1f}KB")
             
         except Exception as e:
-            return f"❌ 분석 중 오류 발생: {e}"
+            st.error(f"파일 탐지 실패: {e}")
+            self.available_files = []
+            self.months = []
+
+    def analyze_service_query(self, user_question):
+        """서비스별 정확한 분석 (자동 파일 탐지)"""
+        if not self.connected:
+            return "❌ Azure 연결이 필요합니다"
+        
+        self._discover_available_files()
+        
+        if not self.available_files:
+            return "❌ 분석할 청구 데이터 파일을 찾을 수 없습니다"
+        
+        try:
+            # 1. 모든 발견된 파일에서 데이터 수집
+            all_monthly_data = self._collect_all_discovered_data()
+            
+            # 2. 고유 서비스 목록 생성
+            unique_services = self._get_unique_services(all_monthly_data)
+            
+            # 3. 질문에서 타겟 서비스 찾기
+            target_services = self._find_target_services(user_question, unique_services, all_monthly_data)
+            
+            # 4. 서비스별 완전한 이력 분석
+            analysis_result = self._analyze_service_history(target_services, all_monthly_data, user_question)
+            
+            return analysis_result
+            
+        except Exception as e:
+            return f"❌ 분석 중 오류: {e}"
     
-    def extract_plan_names(self, question):
-        """질문에서 요금제명 추출"""
-        plan_keywords = {
-            "5G 프리미엄": ["5g", "프리미엄", "5G 프리미엄", "프리미엄 5G"],
-            "LTE 무제한": ["lte", "무제한", "LTE 무제한", "무제한 LTE"],
-            "IoT 센서": ["iot", "센서", "사물인터넷", "IoT 센서"],
-            "기업전용 패키지": ["기업", "비즈니스", "기업전용", "패키지"],
-            "차량용 단말": ["차량", "자동차", "차량용", "단말"],
-            "VPN 서비스": ["vpn", "브이피엔", "VPN"],
-            "클라우드": ["클라우드", "cloud", "백업"]
-        }
+    def _collect_all_discovered_data(self):
+        """발견된 모든 파일에서 데이터 수집"""
+        all_data = {}
         
-        found_plans = []
-        question_lower = question.lower()
-        
-        for plan_name, keywords in plan_keywords.items():
-            if any(keyword.lower() in question_lower for keyword in keywords):
-                found_plans.append(plan_name)
-        
-        return found_plans if found_plans else ["전체"]  # 특정 요금제 없으면 전체 분석
-    
-    def extract_months(self, question):
-        """질문에서 월 정보 추출"""
-        # 월 패턴 찾기
-        month_patterns = [
-            r'2025[-.]?0?([1-6])월?',  # 2025-01, 2025.1월 등
-            r'([1-6])월',               # 1월, 6월 등
-            r'(1월|2월|3월|4월|5월|6월)', # 한글 월
-            r'(상반기|전체)'            # 전체 기간
-        ]
-        
-        months = []
-        for pattern in month_patterns:
-            matches = re.findall(pattern, question)
-            for match in matches:
-                if match in ['1', '2', '3', '4', '5', '6']:
-                    months.append(f"2025-{int(match):02d}")
-                elif match in ['1월', '2월', '3월', '4월', '5월', '6월']:
-                    month_num = int(match.replace('월', ''))
-                    months.append(f"2025-{month_num:02d}")
-                elif match in ['상반기', '전체']:
-                    months = ["2025-01", "2025-02", "2025-03", "2025-04", "2025-05", "2025-06"]
-                    break
-        
-        return months if months else ["2025-06"]  # 기본값: 최근 월
-    
-    def analyze_query_type(self, question):
-        """질문 유형 분석"""
-        question_lower = question.lower()
-        
-        if any(word in question_lower for word in ['왜', '이유', '원인', 'why']):
-            return "원인분석"
-        elif any(word in question_lower for word in ['어떻게', '방법', '개선', 'how']):
-            return "개선방안"
-        elif any(word in question_lower for word in ['언제', '시점', '출시', 'when']):
-            return "시점분석"
-        elif any(word in question_lower for word in ['비교', '차이', 'vs', '대비']):
-            return "비교분석"
-        elif any(word in question_lower for word in ['트렌드', '변화', '추세', 'trend']):
-            return "트렌드분석"
-        elif any(word in question_lower for word in ['할인', '프로모션', '혜택']):
-            return "할인분석"
-        else:
-            return "기본분석"
-    
-    def fetch_plan_data(self, plan_names, months):
-        """Azure Blob Storage에서 요금제 데이터 조회"""
-        plan_data = {}
-        
-        for month in months:
-            if month not in self.monthly_data_paths:
-                continue
+        for file_info in self.available_files:
+            blob_name = file_info['blob_name']
+            month = file_info['month']
             
             try:
-                # CSV 파일 다운로드
-                blob_path = self.monthly_data_paths[month]
-                df = self.download_csv_from_blob(blob_path)
+                df = self._download_csv_from_blob(blob_name)
                 
-                if df is not None:
-                    # 요금제별 필터링
-                    if "전체" not in plan_names:
-                        # 특정 요금제만 필터링
-                        filtered_df = pd.DataFrame()
-                        for plan_name in plan_names:
-                            plan_rows = df[df['청구항목명'].str.contains(plan_name, case=False, na=False)]
-                            filtered_df = pd.concat([filtered_df, plan_rows])
-                        df = filtered_df
+                if df is not None and len(df) > 0:
+                    # 고유 서비스 ID 생성
+                    if '청구항목명' in df.columns and '단위서비스명' in df.columns:
+                        df['서비스_ID'] = df['청구항목명'] + " (" + df['단위서비스명'] + ")"
+                    else:
+                        # 컬럼명이 다를 수 있으므로 유연하게 처리
+                        billing_col = self._find_column(df, ['청구항목명', '항목명', 'item_name', 'plan_name'])
+                        service_col = self._find_column(df, ['단위서비스명', '서비스명', 'service_name', 'unit_service'])
+                        
+                        if billing_col and service_col:
+                            df['서비스_ID'] = df[billing_col] + " (" + df[service_col] + ")"
+                        else:
+                            # 서비스 ID를 만들 수 없으면 청구항목명만 사용
+                            df['서비스_ID'] = df[billing_col] if billing_col else df.index.astype(str)
                     
-                    plan_data[month] = df
+                    all_data[month] = df
                     
             except Exception as e:
-                st.error(f"{month} 데이터 로드 실패: {e}")
+                st.warning(f"⚠️ {blob_name} 로드 실패: {e}")
         
-        return plan_data
+        return all_data
     
-    def download_csv_from_blob(self, blob_path):
-        """Blob에서 CSV 다운로드"""
+    def _find_column(self, df, candidates):
+        """컬럼명 후보 중에서 실제 존재하는 컬럼 찾기"""
+        for candidate in candidates:
+            if candidate in df.columns:
+                return candidate
+            # 대소문자 무시하고 찾기
+            for col in df.columns:
+                if candidate.lower() == col.lower():
+                    return col
+        return None
+    
+    def _download_csv_from_blob(self, blob_name):
+        """Azure에서 CSV 다운로드"""
         try:
             blob_client = self.client.get_blob_client(
                 container="billing-data",
-                blob=blob_path
+                blob=blob_name
             )
             
             csv_content = blob_client.download_blob().readall().decode('utf-8-sig')
-            
-            # ✅ pd.StringIO → io.StringIO 변경
             return pd.read_csv(io.StringIO(csv_content))
             
         except Exception as e:
-            st.error(f"Blob 다운로드 실패 ({blob_path}): {e}")
             return None
     
-    def generate_ai_response(self, question, plan_data, query_type):
-        """AI 분석 응답 생성"""
-        if not plan_data:
-            return "❌ 요청하신 데이터를 찾을 수 없습니다"
+    def _get_unique_services(self, all_monthly_data):
+        """전체 기간의 고유 서비스 목록"""
+        unique_services = set()
         
-        # 데이터 분석
-        analysis_result = self.analyze_data(plan_data, query_type)
+        for month, df in all_monthly_data.items():
+            if '서비스_ID' in df.columns:
+                services = df['서비스_ID'].tolist()
+                unique_services.update(services)
         
-        # 질문 유형별 응답 생성
-        if query_type == "원인분석":
-            return self.create_cause_analysis_response(question, analysis_result)
-        elif query_type == "트렌드분석":
-            return self.create_trend_analysis_response(question, analysis_result)
-        elif query_type == "할인분석":
-            return self.create_discount_analysis_response(question, analysis_result)
-        elif query_type == "비교분석":
-            return self.create_comparison_response(question, analysis_result)
-        else:
-            return self.create_basic_response(question, analysis_result)
+        return sorted(list(unique_services))
     
-    def analyze_data(self, plan_data, query_type):
-        """데이터 분석 수행"""
-        result = {
-            "months": list(plan_data.keys()),
-            "total_items": 0,
-            "monthly_summary": {},
-            "trends": {},
-            "top_plans": [],
-            "discount_info": {}
+    def _find_target_services(self, question, unique_services, all_monthly_data):
+        """질문에서 타겟 서비스 찾기"""
+        question_lower = question.lower()
+        matching_services = []
+        
+        # 키워드 기반 서비스 매칭
+        service_keywords = {
+            "5g": ["5g", "프리미엄"],
+            "lte": ["lte", "무제한"],
+            "iot": ["iot", "센서", "스마트홈", "사물인터넷"],
+            "차량": ["차량", "단말", "auto"],
+            "기업": ["기업", "비즈니스", "corp", "busi"],
+            "vpn": ["vpn", "브이피엔"],
+            "클라우드": ["클라우드", "cloud", "백업"],
+            "음성": ["음성", "통화", "voice"],
+            "데이터": ["데이터", "data"],
+            "부가": ["부가", "addon", "컬러링", "통화대기"]
         }
         
-        monthly_totals = {}
+        # 단위서비스 코드 직접 매칭
+        unit_service_codes = re.findall(r'\b[A-Z]{2,}[0-9]{2,3}\b', question.upper())
         
-        for month, df in plan_data.items():
-            if df.empty:
-                continue
+        for service in unique_services:
+            # 1. 단위서비스 코드 직접 매칭
+            for code in unit_service_codes:
+                if code in service:
+                    matching_services.append(service)
+                    break
             
-            # 월별 요약
-            month_summary = {
-                "total_amount": df['청구금액'].sum() if '청구금액' in df.columns else 0,
-                "total_lines": df['회선수'].sum() if '회선수' in df.columns else 0,
-                "total_discount": df['할인금액'].sum() if '할인금액' in df.columns else 0,
-                "item_count": len(df)
-            }
-            
-            result["monthly_summary"][month] = month_summary
-            monthly_totals[month] = month_summary["total_amount"]
-            
-            # 상위 요금제 (최근 월 기준)
-            if month == max(plan_data.keys()):
-                if '청구항목명' in df.columns and '청구금액' in df.columns:
-                    top_plans = df.nlargest(5, '청구금액')[['청구항목명', '청구금액', '할인율']]
-                    result["top_plans"] = top_plans.to_dict('records')
+            # 2. 키워드 매칭
+            service_added = False
+            for category, keywords in service_keywords.items():
+                if service_added:
+                    break
+                if any(keyword in question_lower for keyword in keywords):
+                    if any(keyword in service.lower() for keyword in keywords):
+                        if service not in matching_services:
+                            matching_services.append(service)
+                            service_added = True
         
-        # 트렌드 분석
-        if len(monthly_totals) >= 2:
-            months_sorted = sorted(monthly_totals.keys())
-            first_month = monthly_totals[months_sorted[0]]
-            last_month = monthly_totals[months_sorted[-1]]
-            
-            if first_month > 0:
-                growth_rate = ((last_month - first_month) / first_month) * 100
-                result["trends"]["growth_rate"] = growth_rate
-                result["trends"]["direction"] = "증가" if growth_rate > 0 else "감소"
-        
-        return result
-    
-    def create_trend_analysis_response(self, question, analysis):
-        """트렌드 분석 응답"""
-        months = analysis["months"]
-        monthly_summary = analysis["monthly_summary"]
-        trends = analysis.get("trends", {})
-        
-        response = f"📈 **요금제 트렌드 분석 ({min(months)} ~ {max(months)})**\n\n"
-        
-        # 월별 변화
-        response += "**💰 월별 청구금액 변화:**\n"
-        for month in sorted(months):
-            if month in monthly_summary:
-                amount = monthly_summary[month]["total_amount"]
-                response += f"* {month}: {amount:,}원\n"
-        
-        # 성장률
-        if "growth_rate" in trends:
-            growth_rate = trends["growth_rate"]
-            direction = trends["direction"]
-            response += f"\n**📊 전체 성장률:** {growth_rate:+.1f}% ({direction})\n"
-            
-            if growth_rate > 20:
-                response += "🔥 **급성장 중!** 마케팅 투자 확대 고려\n"
-            elif growth_rate < -20:
-                response += "⚠️ **급감세!** 요금제 개선 필요\n"
-            else:
-                response += "✅ **안정적 성장** 현 상태 유지\n"
-        
-        # 상위 요금제
-        if analysis["top_plans"]:
-            response += f"\n**🏆 주요 요금제 (최근 월 기준):**\n"
-            for i, plan in enumerate(analysis["top_plans"][:3], 1):
-                response += f"{i}. {plan['청구항목명']}: {plan['청구금액']:,}원\n"
-        
-        return response
-    
-    def create_discount_analysis_response(self, question, analysis):
-        """할인 분석 응답"""
-        months = analysis["months"]
-        monthly_summary = analysis["monthly_summary"]
-        
-        response = f"💸 **할인 혜택 분석 ({min(months)} ~ {max(months)})**\n\n"
-        
-        total_discount = 0
-        total_amount = 0
-        
-        # 월별 할인 현황
-        response += "**📊 월별 할인 현황:**\n"
-        for month in sorted(months):
-            if month in monthly_summary:
-                discount = monthly_summary[month]["total_discount"]
-                amount = monthly_summary[month]["total_amount"]
-                discount_rate = (discount / (amount + discount) * 100) if (amount + discount) > 0 else 0
+        # 매칭된 서비스가 없으면 상위 10개 서비스 반환
+        if not matching_services:
+            # 가장 최근 월 기준 상위 10개
+            if all_monthly_data:
+                latest_month = max(all_monthly_data.keys())
+                latest_data = all_monthly_data[latest_month]
                 
-                response += f"* {month}: {discount:,}원 할인 ({discount_rate:.1f}%)\n"
-                total_discount += discount
-                total_amount += amount
+                # 청구금액 컬럼 찾기
+                amount_col = self._find_column(latest_data, ['청구금액', 'amount', 'billing_amount'])
+                
+                if amount_col:
+                    top_services = latest_data.nlargest(10, amount_col)['서비스_ID'].tolist()
+                    matching_services = top_services
+                else:
+                    # 청구금액 컬럼이 없으면 처음 10개
+                    matching_services = unique_services[:10]
         
-        # 전체 할인율
-        overall_discount_rate = (total_discount / (total_amount + total_discount) * 100) if (total_amount + total_discount) > 0 else 0
-        response += f"\n**💯 전체 할인율:** {overall_discount_rate:.1f}%\n"
-        response += f"**💰 총 할인 혜택:** {total_discount:,}원\n"
-        
-        # 할인 수준 평가
-        if overall_discount_rate >= 15:
-            response += "🎉 **높은 할인율!** 고객 만족도 높을 것으로 예상\n"
-        elif overall_discount_rate >= 8:
-            response += "✅ **적정 할인율** 경쟁력 있는 수준\n"
-        else:
-            response += "💡 **할인 확대 고려** 고객 유치를 위한 프로모션 검토\n"
-        
-        return response
+        return matching_services[:15]  # 최대 15개까지
     
-    def create_basic_response(self, question, analysis):
-        """기본 분석 응답"""
-        months = analysis["months"]
-        monthly_summary = analysis["monthly_summary"]
+    def _analyze_service_history(self, target_services, all_monthly_data, question):
+        """서비스별 완전한 이력 분석"""
+        if not target_services:
+            return "❌ 분석할 서비스를 찾을 수 없습니다"
         
-        response = f"📊 **요금제 분석 결과 ({min(months)} ~ {max(months)})**\n\n"
+        response = f"📊 **자동 탐지 서비스 분석** (총 {len(target_services)}개 서비스)\n\n"
+        response += f"🔍 **분석 기간**: {len(all_monthly_data)}개월 데이터 ({', '.join(sorted(all_monthly_data.keys()))})\n\n"
         
-        # 전체 현황
-        total_amount = sum(summary["total_amount"] for summary in monthly_summary.values())
-        total_lines = sum(summary["total_lines"] for summary in monthly_summary.values())
-        total_discount = sum(summary["total_discount"] for summary in monthly_summary.values())
+        for i, service_id in enumerate(target_services, 1):
+            response += f"## {i}. {service_id}\n\n"
+            
+            # 서비스 이력 추출
+            service_history = []
+            
+            for month in sorted(all_monthly_data.keys()):
+                df = all_monthly_data[month]
+                service_data = df[df['서비스_ID'] == service_id]
+                
+                if len(service_data) > 0:
+                    row = service_data.iloc[0]
+                    
+                    # 유연한 컬럼 매핑
+                    amount_col = self._find_column(df, ['청구금액', 'amount', 'billing_amount'])
+                    lines_col = self._find_column(df, ['회선수', 'lines', 'line_count'])
+                    arpu_col = self._find_column(df, ['ARPU', 'arpu', 'avg_revenue'])
+                    discount_col = self._find_column(df, ['할인금액', 'discount_amount', 'discount'])
+                    
+                    service_history.append({
+                        "월": month,
+                        "청구금액": row.get(amount_col, 0) if amount_col else 0,
+                        "회선수": row.get(lines_col, 0) if lines_col else 0,
+                        "ARPU": row.get(arpu_col, 0) if arpu_col else 0,
+                        "할인금액": row.get(discount_col, 0) if discount_col else 0,
+                        "청구항목명": row.get('청구항목명', row.get('항목명', '')),
+                        "단위서비스명": row.get('단위서비스명', row.get('서비스명', '')),
+                        "LOB": row.get('lob명', row.get('LOB', ''))
+                    })
+            
+            if service_history:
+                # 서비스 기본 정보
+                first_record = service_history[0]
+                response += f"**📋 서비스 정보:**\n"
+                response += f"* 청구항목명: {first_record['청구항목명']}\n"
+                response += f"* 단위서비스: {first_record['단위서비스명']}\n"
+                response += f"* LOB: {first_record['LOB']}\n"
+                response += f"* 데이터 시작: {first_record['월']}\n"
+                response += f"* 추적 기간: {len(service_history)}개월\n\n"
+                
+                # 월별 상세 이력
+                response += f"**📈 월별 서비스 이력:**\n"
+                for record in service_history:
+                    response += f"* **{record['월']}**: "
+                    response += f"청구 {record['청구금액']:,}원, "
+                    response += f"회선 {record['회선수']:,}개"
+                    
+                    if record['ARPU'] > 0:
+                        response += f", ARPU {record['ARPU']:,.0f}원"
+                    if record['할인금액'] > 0:
+                        response += f", 할인 {record['할인금액']:,}원"
+                    response += "\n"
+                
+                # 트렌드 분석
+                if len(service_history) >= 2:
+                    first_amount = service_history[0]['청구금액']
+                    last_amount = service_history[-1]['청구금액']
+                    
+                    first_lines = service_history[0]['회선수']
+                    last_lines = service_history[-1]['회선수']
+                    
+                    total_growth = ((last_amount - first_amount) / first_amount * 100) if first_amount > 0 else 0
+                    lines_growth = ((last_lines - first_lines) / first_lines * 100) if first_lines > 0 else 0
+                    
+                    response += f"\n**📊 전체 성과 ({len(service_history)}개월):**\n"
+                    response += f"* 청구금액 변화: {total_growth:+.1f}%\n"
+                    response += f"* 회선수 변화: {lines_growth:+.1f}%\n"
+                    
+                    # 성과 평가
+                    if total_growth > 100:
+                        response += "🔥 **폭발적 성장!** 매우 성공적인 서비스\n"
+                    elif total_growth > 50:
+                        response += "🚀 **급성장** 우수한 성과\n"
+                    elif total_growth > 20:
+                        response += "📈 **꾸준한 성장** 안정적 발전\n"
+                    elif total_growth > -10:
+                        response += "➡️ **안정적** 현상 유지\n"
+                    else:
+                        response += "⚠️ **감소세** 개선 필요\n"
+                
+                response += "\n---\n\n"
+            else:
+                response += "❌ 해당 서비스의 이력을 찾을 수 없습니다\n\n---\n\n"
         
-        response += f"**💰 총 청구금액:** {total_amount:,}원\n"
-        response += f"**📱 총 회선수:** {total_lines:,}개\n"
-        response += f"**💸 총 할인금액:** {total_discount:,}원\n"
-        
-        if total_lines > 0:
-            avg_arpu = total_amount / total_lines
-            response += f"**📊 평균 ARPU:** {avg_arpu:,.0f}원\n"
-        
-        # 상위 요금제
-        if analysis["top_plans"]:
-            response += f"\n**🏆 주요 요금제:**\n"
-            for i, plan in enumerate(analysis["top_plans"][:5], 1):
-                response += f"{i}. {plan['청구항목명']}: {plan['청구금액']:,}원"
-                if '할인율' in plan and plan['할인율'] > 0:
-                    response += f" ({plan['할인율']}% 할인)"
-                response += "\n"
+        # 시스템 정보
+        response += "## 🔧 **자동 탐지 시스템 정보**\n\n"
+        response += f"📁 **발견된 파일**: {len(self.available_files)}개\n"
+        response += f"📅 **분석 기간**: {len(all_monthly_data)}개월\n"
+        response += f"🏷️ **총 서비스**: {len(self._get_unique_services(all_monthly_data))}개\n"
+        response += f"💡 **장점**: 새로운 월 데이터 업로드시 자동으로 포함됩니다!\n"
         
         return response
 
-# 사용 예시 함수
 def handle_azure_ai_query(user_question):
-    """Azure AI 질문 처리 함수"""
+    """자동 탐지 Azure AI 질문 처리"""
     azure_ai = AzureHelper()
     
     if not azure_ai.connected:
@@ -400,6 +405,7 @@ def handle_azure_ai_query(user_question):
     
     # AI 분석 실행
     with st.spinner("🤖 Azure에서 데이터 분석 중..."):
-        ai_response = azure_ai.analyze_plan_query(user_question)
+        ai_response = azure_ai.analyze_service_query(user_question)
+    
     
     return ai_response

@@ -6,7 +6,7 @@ def render_header():
     """메인 헤더 렌더링"""
     st.markdown("""
     <div class="main-header">
-        <h1>💼 청구 Copilot - 이상 감지 + 요약 분석</h1>
+        <h2>💼 청구 이상 감지 & 요약 분석</h2>
         <p style="margin: 0; opacity: 0.9;">AI 기반 청구 데이터 분석 및 이상 패턴 탐지 시스템</p>
     </div>
     """, unsafe_allow_html=True)

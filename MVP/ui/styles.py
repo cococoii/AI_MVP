@@ -11,7 +11,7 @@ def load_custom_styles():
             padding: 1rem 2rem;
             border-radius: 10px;
             color: white;
-            margin-bottom: 2rem;
+            margin-bottom: 1rem;
             box-shadow: 0 4px 15px rgba(0,0,0,0.1);
         }
         
@@ -28,8 +28,8 @@ def load_custom_styles():
         /* 버튼 스타일 개선 */
         .stButton > button {
             background: linear-gradient(45deg, #667eea, #764ba2);
-            color: white;
-            border: none;
+            # color: white;
+            # border: none;
             border-radius: 8px;
             padding: 0.5rem 1rem;
             font-weight: 600;
@@ -47,7 +47,7 @@ def load_custom_styles():
             padding: 1rem;
             border-radius: 10px;
             border-left: 4px solid #ff6b6b;
-            margin: 1rem 0;
+            margin: 0 0 1rem 0;
         }
         
         .success-box {
@@ -55,7 +55,7 @@ def load_custom_styles():
             padding: 1rem;
             border-radius: 10px;
             border-left: 4px solid #4ecdc4;
-            margin: 1rem 0;
+            margin: 0rem 0 1rem 0;
         }
         
         /* 사이드바 개선 */
