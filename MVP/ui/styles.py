@@ -27,13 +27,14 @@ def load_custom_styles():
         
         /* 버튼 스타일 개선 */
         .stButton > button {
-            background: linear-gradient(45deg, #667eea, #764ba2);
-            # color: white;
-            # border: none;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
             border-radius: 8px;
             padding: 0.5rem 1rem;
             font-weight: 600;
             transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
         }
         
         .stButton > button:hover {
@@ -96,6 +97,25 @@ def load_custom_styles():
         /* 프로그레스 바 스타일 */
         .stProgress > div > div > div > div {
             background: linear-gradient(90deg, #667eea, #764ba2);
+        }
+                
+        /* 커스텀 버튼 스타일 */
+        .custom-btn {
+            background: linear-gradient(135deg, #78FFCD, #3C465C);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 25px;
+            border: none;
+            font-weight: bold;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+        }
+
+        .custom-btn:hover {
+            background: linear-gradient(135deg, #54d8a3, #2e3544);
+            transform: scale(1.03);
         }
         
     </style>

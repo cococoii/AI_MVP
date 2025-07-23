@@ -27,8 +27,10 @@ def render_upload_section(data_processor, session_mgr=None):
         col1, col_sep, col2 = st.columns([1, 0.02, 2])  # 중간에 얇은 구분선 공간
         with col1:
             st.caption("📂 CSV 파일을 업로드하세요")
+            file_upload_key = f"file_uploader_{st.session_state.current_session_id}"
             uploaded_file = st.file_uploader(
                     label="", 
+                    key=file_upload_key,
                     label_visibility="collapsed",
                     type="csv",
                     help="청구 데이터 CSV 파일을 선택해주세요"
@@ -282,49 +284,146 @@ def render_chat_interface(chat_mgr, session_mgr):
             col1, col2, col3 = st.columns(3)
             
             with col1:
-                if st.button("📈 5G 프리미엄 트렌드", key="azure_q1"):
-                    st.session_state['azure_query'] = "5G 프리미엄 요금제 트렌드 어때?"
+                if st.button("📈 **5G 서비스 성장 현황**", 
+                           key="azure_q1",
+                           help="5G 관련 모든 서비스의 성장률과 트렌드를 분석합니다"):
+                    st.session_state['azure_query'] = "5G 관련 서비스들 성장률이 어떻게 변했어? 트렌드 분석해줘"
             
             with col2:
-                if st.button("💸 6월 할인 현황", key="azure_q2"):
-                    st.session_state['azure_query'] = "2025년 6월 할인 많이 받은 요금제는?"
+                if st.button("🚗 **차량 IoT 시장 동향**",
+                           key="azure_q2", 
+                           help="차량용 서비스와 IoT 센서의 시장 성과를 비교분석합니다"):
+                    st.session_state['azure_query'] = "차량용 단말 월정액과 IoT 센서 서비스 비교해서 어느게 더 성장했어?"
             
             with col3:
-                if st.button("🤖 IoT 성장률", key="azure_q3"):
-                    st.session_state['azure_query'] = "IoT 센서 월정액 성장률 어떻게 변했어?"
+                if st.button("💼 **기업 서비스 수익성**",
+                           key="azure_q3",
+                           help="기업 대상 서비스들의 수익성과 ARPU를 분석합니다"):
+                    st.session_state['azure_query'] = "기업전용 패키지, VPN 서비스, 클라우드 연결 서비스 중에 어떤게 수익성이 가장 좋아?"
+            # 두 번째 줄
+            col4, col5, col6 = st.columns(3)
             
+            with col4:
+                if st.button("🔍 **신규 출시 서비스 성과**",
+                           key="azure_q4",
+                           help="최근에 출시된 신규 서비스들의 초기 성과를 분석합니다"):
+                    st.session_state['azure_query'] = "2025년 3월 이후에 출시된 신규 서비스들 성과는 어때? 어떤 서비스가 가장 성공적이야?"
+            
+            with col5:
+                if st.button("📊 **LOB별 성과 비교**",
+                           key="azure_q5",
+                           help="모바일, 기업솔루션, IoT 등 사업부별 성과를 비교합니다"):
+                    st.session_state['azure_query'] = "LOB별로 어떤 사업부가 가장 성장했어? 모바일 vs 기업솔루션 vs IoT 비교해줘"
+            
+            with col6:
+                if st.button("💸 **할인 정책 효과 분석**",
+                           key="azure_q6",
+                           help="할인 정책이 각 서비스에 미친 영향을 분석합니다"):
+                    st.session_state['azure_query'] = "할인을 많이 받은 서비스들이 실제로 성장했어? 할인 정책 효과 분석해줘"
+            
+            # 🎨 구분선
+            st.markdown("---")
+
             # 사용자 직접 입력
+            st.markdown("#### 🤖 **직접 질문하기**")
             user_question = st.text_input(
                 "Azure 저장 데이터에 대해 질문하세요:",
-                placeholder="예: 차량용 단말 상반기 성장률은?",
-                key="azure_ai_input"
+                placeholder="예: DATA001 서비스가 언제부터 급성장했어? 원인은 뭘까?",
+                key="azure_ai_input",
+                help="구체적인 단위서비스 코드(예: DATA001, IOT002)를 언급하면 더 정확한 분석이 가능합니다"
             )
             
             # 질문 처리
             query = user_question or st.session_state.get('azure_query', '')
             
             if query:
-                st.markdown(f"**🤖 질문:** {query}")
+                # 🎨 질문 표시 (카드 형태)
+                st.markdown(f"""
+                <div style="
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    padding: 15px;
+                    border-radius: 10px;
+                    margin: 15px 0;
+                    color: white;
+                    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+                ">
+                    <h4 style="margin:0; color:white;">🤖 질문: {query}</h4>
+                </div>
+                """, unsafe_allow_html=True)
                 
-                with st.spinner("🤖 Azure AI 분석 중..."):
+                # AI 분석 실행
+                with st.spinner("🧠 Azure AI가 월별 데이터를 분석하고 있습니다..."):
                     ai_response = handle_azure_ai_query(query)
                 
-                st.markdown("**🤖 AI 답변:**")
+                # 응답 표시
+                st.markdown("#### 🤖 **AI 분석 결과**")
                 st.markdown(ai_response)
                 
                 # 세션 정리
                 if 'azure_query' in st.session_state:
                     del st.session_state['azure_query']
             
-            # 도움말
-            with st.expander("💡 질문 예시"):
+            # 📚 도움말
+            with st.expander("💡 **효과적인 질문 방법**"):
                 st.markdown("""
-                - "5G 프리미엄 요금제 2025년 상반기 성장률 어때?"
-                - "IoT 센서 월정액 트렌드 분석해줘"
-                - "2025년 6월 할인 가장 많이 받은 요금제는?"
-                - "차량용 단말 vs IoT 센서 비교해줘"
+                **🎯 구체적인 질문 예시:**
+                
+                **📈 트렌드 분석:**
+                - "DATA001 서비스 6개월간 성장률 어떻게 변했어?"
+                - "IoT 관련 서비스들 중에 어떤게 가장 빠르게 성장했어?"
+                
+                **💰 수익성 분석:**
+                - "ARPU가 가장 높은 서비스 top 5는?"
+                - "기업용 서비스들 중에 수익성이 가장 좋은건?"
+                
+                **📊 비교 분석:**
+                - "VOICE001 vs DATA001 어떤게 더 안정적이야?"
+                - "2025년 상반기 신규 출시 서비스들 성과 비교해줘"
+                
+                **🔍 원인 분석:**
+                - "VPN001 서비스가 3월부터 급성장한 이유는?"
+                - "할인율이 높은 서비스들이 실제로 더 성장했어?"
                 """)
-
+                
+def generate_smart_summary(df, df_flagged):
+    """스마트 AI 요약 생성"""
+    
+    summary_parts = []
+    
+    # 기본 현황
+    total_amount = df['청구금액'].sum() if '청구금액' in df.columns else 0
+    total_lines = df['회선수'].sum() if '회선수' in df.columns else 0
+    
+    summary_parts.append(f"📊 **전체 현황**: {len(df)}개 서비스, 총 {total_amount/100000000:.1f}억원 ({total_lines/10000:.1f}만 회선)")
+    
+    # 이상 항목 분석
+    if len(df_flagged) > 0:
+        anomaly_rate = (len(df_flagged) / len(df)) * 100
+        summary_parts.append(f"🚨 **이상 탐지**: {len(df_flagged)}개 항목 ({anomaly_rate:.1f}%) 에서 이상 패턴 발견")
+        
+        # 최고 위험 항목
+        if '청구금액' in df_flagged.columns:
+            top_risk = df_flagged.loc[df_flagged['청구금액'].idxmax()]
+            summary_parts.append(f"⚠️ **최고 위험**: {top_risk.get('청구항목명', 'Unknown')} ({top_risk.get('청구금액', 0)/100000000:.1f}억원)")
+    else:
+        summary_parts.append("✅ **안정성**: 모든 서비스가 정상 범위 내에서 운영 중")
+    
+    # LOB별 분석
+    if 'lob명' in df.columns:
+        lob_summary = df.groupby('lob명')['청구금액'].sum().sort_values(ascending=False)
+        top_lob = lob_summary.index[0]
+        summary_parts.append(f"🏆 **최대 사업부**: {top_lob} ({lob_summary.iloc[0]/100000000:.1f}억원)")
+    
+    # 추천 액션
+    if len(df_flagged) > 5:
+        summary_parts.append("💡 **추천**: 이상 항목이 많습니다. 상세 분석을 통해 원인을 파악하고 개선 방안을 수립하세요.")
+    elif len(df_flagged) > 0:
+        summary_parts.append("💡 **추천**: 일부 이상 항목을 모니터링하고 필요시 조치하세요.")
+    else:
+        summary_parts.append("💡 **추천**: 안정적인 상태입니다. 성장 기회를 모색하세요.")
+    
+    return "\n\n".join(summary_parts)
+                
 def render_chart_visualization(df, keyword):
     """차트 시각화 렌더링"""
     try:
