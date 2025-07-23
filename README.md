@@ -93,7 +93,7 @@ Azure 기반 AI가 자동으로 이상 탐지, 요약 보고서를 생성하고,
 - GPT 요약 신뢰성 검증 위한 샘플 검수 및 재학습
 
 ---
-
+링크 : https://ktds16web001-e9gfddfybqd5h9b7.centralus-01.azurewebsites.net/
 ## 🚀 상세 기능
 
 | 구분           | 설명                                                       |
