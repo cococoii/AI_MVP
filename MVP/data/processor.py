@@ -95,7 +95,12 @@ class DataProcessor:
                 df['기준월'] = '2025-06-01'
             
             df['기준월'] = pd.to_datetime(df['기준월'], errors='coerce')
-            months = sorted(df['기준월'].dropna().dt.to_period("M").unique())
+            base_date = df['기준월'].dropna().sort_values().iloc[-1]
+            # 3개월 리스트 생성
+            base_period = base_date.to_period('M') 
+            
+            months =  [base_period - 2, base_period - 1, base_period]
+            print(months)
             
             biz_day_data = []
             prev_days = None
