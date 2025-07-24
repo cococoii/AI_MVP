@@ -91,6 +91,7 @@ AI_MVP/
 
 ---
 #### 🔗 데모 링크
+<img width="1544" height="700" alt="image" src="https://github.com/user-attachments/assets/5e172ade-cc32-4b92-9482-e87f64d7d7f0" />
 
 [🌐 Azure Web App 바로가기](https://ktds16web001-e9gfddfybqd5h9b7.centralus-01.azurewebsites.net/)
 
