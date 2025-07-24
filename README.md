@@ -63,15 +63,15 @@ AI_MVP/
 ⬇️  
 🐍 Streamlit + Pandas  
 ⬇️  
-📊 CSV DataFrame 및 임계치 이상에 대한 이상 탐지
+📊 CSV DataFrame 및 임계치 이상에 대한 이상 탐지  
 ⬇️  
-🧠 Azure OpenAI GPT-4o-mini 사용하여 자동요약 리포트
+🧠 Azure OpenAI GPT-4o-mini 사용하여 자동요약 리포트  
 ⬇️  
-📈 Plotly 시각화 사용하여 청구 금액 및 회선수에 대한 최근 3개월간의 트렌드 시간화
+📈 Plotly 시각화 사용하여 청구 금액 및 회선수에 대한 최근 3개월간의 트렌드 시간화  
 ⬇️  
-💬 사용자 자연어 질문 입력  
+💬 사용자 자연어 질문 입력    
 ⬇️  
-☁️ Azure Blob Storage에 저장된 여러 개월치 데이터 자동 인식 및 분석
+☁️ Azure Blob Storage에 저장된 여러 개월치 데이터 자동 인식 및 분석  
 
 ---
 
